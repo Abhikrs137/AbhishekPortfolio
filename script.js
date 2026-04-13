@@ -1,8 +1,16 @@
 const menuBtn = document.querySelector(".menu-btn");
+const brandLink = document.querySelector(".brand");
 const nav = document.querySelector(".nav");
 const navLinks = document.querySelectorAll(".nav a");
 const revealEls = document.querySelectorAll(".reveal");
 const form = document.querySelector(".contact-form");
+const heroSection = document.querySelector(".hero");
+const awardCards = document.querySelectorAll(".award-card");
+const awardLightbox = document.querySelector("#awardLightbox");
+const awardLightboxImage = document.querySelector("#awardLightboxImage");
+const awardLightboxTitle = document.querySelector("#awardLightboxTitle");
+const awardLightboxClose = document.querySelector("#awardLightboxClose");
+const awardLightboxBackdrop = document.querySelector("#awardLightboxBackdrop");
 const chatbotToggle = document.querySelector("#chatbotToggle");
 const chatbotShell = document.querySelector("#chatbotShell");
 const chatbotForm = document.querySelector("#chatbotForm");
@@ -13,9 +21,7 @@ const themeToggle = document.querySelector(".theme-toggle");
 const themeToggleIcon = document.querySelector(".theme-toggle-icon");
 const root = document.documentElement;
 const storedTheme = localStorage.getItem("theme");
-const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-  ? "dark"
-  : "light";
+const preferredTheme = "dark";
 
 const setTheme = (theme) => {
   root.setAttribute("data-theme", theme);
@@ -39,11 +45,62 @@ if (menuBtn && nav) {
   });
 }
 
+if (brandLink && heroSection) {
+  brandLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    heroSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    heroSection.classList.remove("hero-home-flash");
+    window.requestAnimationFrame(() => {
+      heroSection.classList.add("hero-home-flash");
+    });
+  });
+}
+
 if (themeToggle) {
   themeToggle.addEventListener("click", () => {
     const currentTheme = root.getAttribute("data-theme") || "light";
     setTheme(currentTheme === "dark" ? "light" : "dark");
   });
+}
+
+const closeAwardLightbox = () => {
+  if (!awardLightbox || !awardLightboxImage) {
+    return;
+  }
+
+  awardLightbox.setAttribute("hidden", "");
+  awardLightboxImage.setAttribute("src", "");
+  awardLightboxImage.setAttribute("alt", "");
+};
+
+awardCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    if (!awardLightbox || !awardLightboxImage || !awardLightboxTitle) {
+      return;
+    }
+
+    const image = card.dataset.awardImage;
+    const title = card.dataset.awardTitle || "Certificate";
+    const preview = card.querySelector("img");
+    const altText = preview ? preview.alt : title;
+
+    if (!image) {
+      return;
+    }
+
+    awardLightboxImage.setAttribute("src", image);
+    awardLightboxImage.setAttribute("alt", altText);
+    awardLightboxTitle.textContent = title;
+    awardLightbox.removeAttribute("hidden");
+  });
+});
+
+if (awardLightboxClose) {
+  awardLightboxClose.addEventListener("click", closeAwardLightbox);
+}
+
+if (awardLightboxBackdrop) {
+  awardLightboxBackdrop.addEventListener("click", closeAwardLightbox);
 }
 
 if (chatbotToggle && chatbotShell) {
@@ -156,18 +213,84 @@ chatbotChips.forEach((chip) => {
   });
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeAwardLightbox();
+  }
+});
+
 if (form) {
-  form.addEventListener("submit", (event) => {
+  const button = form.querySelector("button");
+  const status = form.querySelector(".contact-form-status");
+  const accessKeyField = form.querySelector('input[name="access_key"]');
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const button = form.querySelector("button");
+    if (!button) {
+      return;
+    }
+
+    const accessKey = accessKeyField ? accessKeyField.value.trim() : "";
+
+    if (!accessKey || accessKey === "PASTE_YOUR_WEB3FORMS_ACCESS_KEY_HERE") {
+      if (status) {
+        status.textContent = "Add your Web3Forms access key in the contact form before testing email delivery.";
+        status.classList.remove("is-success");
+        status.classList.add("is-error");
+      }
+      return;
+    }
+
     const originalText = button.textContent;
-    button.textContent = "Message Sent!";
+    button.textContent = "Sending...";
     button.disabled = true;
 
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.disabled = false;
+    if (status) {
+      status.textContent = "Sending your message...";
+      status.classList.remove("is-success", "is-error");
+    }
+
+    try {
+      const response = await fetch(form.action, {
+        method: form.method,
+        body: new FormData(form),
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || "Request failed");
+      }
+
       form.reset();
-    }, 1800);
+      if (accessKeyField) {
+        accessKeyField.value = accessKey;
+      }
+      button.textContent = "Message Sent!";
+
+      if (status) {
+        status.textContent = "Message sent successfully. You should receive it in your configured email inbox.";
+        status.classList.add("is-success");
+      }
+    } catch (error) {
+      button.textContent = "Try Again";
+
+      if (status) {
+        status.textContent = "The message could not be sent right now. Please try again, or use the email card above.";
+        status.classList.add("is-error");
+      }
+    } finally {
+      window.setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+      }, 2200);
+    }
   });
 }
